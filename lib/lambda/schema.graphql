@@ -1,0 +1,7 @@
+schema {
+  query: Query
+}
+
+type Query {
+  oidc(idToken: String!): String @aws_api_key @aws_iam
+}
