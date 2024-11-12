@@ -4,60 +4,69 @@ import {
 } from "@aws-sdk/client-sso-oidc";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import * as jwt from "jsonwebtoken";
+import jwksClient from "jwks-rsa";
 
-// Constants retrieved from environment variables
+// Environment variables
 const idcAppArn = process.env.IDP_APP_ARN;
 const identityBearerRoleArn = process.env.IDENTITY_BEARER_ROLE_ARN;
 const region = process.env.REGION;
 const grantType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+const jwksUri = process.env.TTI_JWKS_URI; // 3rd party IDP's JWKS endpoint to validate the incoming idToken against
 
-// Validate necessary environment variables
-if (!idcAppArn || !identityBearerRoleArn || !region) {
+if (!idcAppArn || !identityBearerRoleArn || !region || !jwksUri) {
   throw new Error("Missing necessary environment variables.");
 }
 
-// Helper function to validate JWT format
-const isValidJwt = (token: string): boolean => {
-  try {
-    const decoded = jwt.decode(token, { complete: true });
-    return Boolean(
-      decoded &&
-        typeof decoded === "object" &&
-        decoded.header &&
-        decoded.payload
-    );
-  } catch (error) {
-    return false;
+// Helper function to retrieve the signing key
+const getSigningKey = async (kid: string): Promise<string> => {
+  const client = jwksClient({
+    jwksUri,
+  });
+  const key = await client.getSigningKey(kid);
+  return key.getPublicKey();
+};
+
+// Helper function to verify JWT
+const verifyJwt = async (token: string): Promise<jwt.JwtPayload> => {
+  const decodedHeader = jwt.decode(token, { complete: true })?.header;
+  if (!decodedHeader || !decodedHeader.kid) {
+    throw new Error("Invalid token header; missing 'kid' field.");
   }
+
+  const signingKey = await getSigningKey(decodedHeader.kid);
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, signingKey, {}, (err, decoded) => {
+      if (err) return reject(new Error("Invalid token"));
+      resolve(decoded as jwt.JwtPayload);
+    });
+  });
 };
 
 export const handler = async (event) => {
   try {
-    // Input validation: Check if idToken is provided and is a valid JWT
-    const idToken = event.arguments?.idToken;
-    if (!idToken || !isValidJwt(idToken)) {
-      throw new Error("Invalid or missing idToken.");
+    // validate and verify idToken from input
+    const idpIdToken = event.arguments?.idToken;
+    if (!idpIdToken) {
+      throw new Error("Missing idToken.");
     }
+    await verifyJwt(idpIdToken);
 
     // Step 1: Exchange external IDP idToken for IAM IDC idToken
     const ssoClient = new SSOOIDCClient({});
-    const tokenResponse = await ssoClient.send(
-      new CreateTokenWithIAMCommand({
-        clientId: idcAppArn,
-        grantType,
-        assertion: idToken,
-      })
-    );
+    const idcIdToken = (
+      await ssoClient.send(
+        new CreateTokenWithIAMCommand({
+          clientId: idcAppArn,
+          grantType,
+          assertion: idpIdToken,
+        })
+      )
+    ).idToken;
 
-    const idcIdToken = tokenResponse.idToken;
     if (!idcIdToken) {
       throw new Error("Failed to retrieve IDC idToken.");
     }
-
-    const decodedIdToken = jwt.decode(idcIdToken) as jwt.JwtPayload;
-    if (!decodedIdToken) {
-      throw new Error("Failed to decode idToken.");
-    }
+    const decodedIdcIdToken = jwt.decode(idcIdToken) as jwt.JwtPayload;
 
     // Step 2: Use IAM IDC idToken to assume identityBearerRoleArn with specific context
     const stsClient = new STSClient({ region });
@@ -69,7 +78,7 @@ export const handler = async (event) => {
         ProvidedContexts: [
           {
             ProviderArn: "arn:aws:iam::aws:contextProvider/IdentityCenter",
-            ContextAssertion: decodedIdToken["sts:identity_context"],
+            ContextAssertion: decodedIdcIdToken["sts:identity_context"],
           },
         ],
       })
