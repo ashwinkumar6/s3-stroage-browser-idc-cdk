@@ -21,18 +21,20 @@ cdk deploy --all \
 -c idcArn=<idcArn> \
 -c idcUserId=<idcUserId> \
 -c idcAppArn=<idcAppArn> \
--c bucketName=<bucketName>
+-c bucketName=<bucketName> \
+-c trustedTokenIssuerJwksEndpoint=<trustedTokenIssuerJwksEndpoint>
 ```
 
 Example:
 ```
-cdk destroy --all \
+cdk deploy --all \
 -c accountId=11111111 \
 -c region=us-east-2 \
 -c idcArn=arn:aws:sso:::instance/ssoins-00000000 \
 -c idcUserId=70d1-70b8-38ca-000 \
 -c idcAppArn=arn:aws:sso::11111111:application/ssoins-000000/apl-00000 \
 -c bucketName=access-grant-bucket
+-c trustedTokenIssuerJwksEndpoint=https://my-domain/.well-known/jwks.json
 ```
 
 Note: IAM Identity center needs to be created and configured prior to deploying the cdk. Please refer to documentation for instructions. 
@@ -45,6 +47,7 @@ cdk destroy --all \
 -c idcArn=<idcArn> \
 -c idcUserId=<idcUserId> \
 -c idcAppArn=<idcAppArn> \
--c bucketName=<bucketName>
+-c bucketName=<bucketName> \
+-c trustedTokenIssuerJwksEndpoint=<trustedTokenIssuerJwksEndpoint>
 ```
 Note: before destroying stack delete all items from bucket and detach IDC from AG on the S3->AG console  

@@ -28,6 +28,9 @@ export class LambdaStack extends Stack {
     const accountId = this.node.tryGetContext("accountId");
     const region = this.node.tryGetContext("region");
     const idcAppArn = this.node.tryGetContext("idcAppArn");
+    const ttiJwksEndpoint = this.node.tryGetContext(
+      "trustedTokenIssuerJwksEndpoint"
+    );
 
     // 1. Create Identity Bearer Role that provides access to AGs
     // lambda returns creds for this role
@@ -63,6 +66,7 @@ export class LambdaStack extends Stack {
         REGION: region,
         IDP_APP_ARN: idcAppArn,
         IDENTITY_BEARER_ROLE_ARN: identityBearerRole.roleArn,
+        TTI_JWKS_URI: ttiJwksEndpoint,
       },
     });
     const lambdaDefaultRoleArn = lambda.role?.roleArn; // get default lambda role

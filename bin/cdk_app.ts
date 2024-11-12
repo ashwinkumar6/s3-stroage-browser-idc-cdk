@@ -21,5 +21,5 @@ const app = new cdk.App();
 //   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
 // });
 
-new S3AccessGrantStack(app, "S3AccessGrantStack", {});
-new LambdaStack(app, "LambdaStack", {});
+new S3AccessGrantStack(app, "portcullis-S3AccessGrantStack", {});
+new LambdaStack(app, "portcullis-LambdaStack", {});
